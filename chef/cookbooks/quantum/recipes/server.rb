@@ -13,13 +13,23 @@
 # limitations under the License.
 #
 
+quantum_path = "/opt/quantum"
+venv_path = node[:quantum][:use_virtualenv] ? "#{quantum_path}/.venv" : nil
+venv_prefix = node[:quantum][:use_virtualenv] ? ". #{venv_path}/bin/activate &&" : nil
+
+
 unless node[:quantum][:use_gitrepo]
   package "quantum" do
     action :install
   end
 else
-  pfs_and_install_deps(@cookbook_name)
+  pfs_and_install_deps @cookbook_name do
+    virtualenv venv_path
+    path quantum_path
+    wrap_bins [ "quantum" ]
+  end
   link_service @cookbook_name do
+    virtualenv venv_path
     bin_name "quantum-server --config-dir /etc/quantum/"
   end
   create_user_and_dirs(@cookbook_name)
@@ -54,12 +64,15 @@ end
 
 if node[:quantum][:use_gitrepo]
   link_service "quantum-openvswitch-agent" do
+    virtualenv venv_path
     bin_name "quantum-openvswitch-agent --config-dir /etc/quantum/"
   end
   link_service "quantum-dhcp-agent" do
+    virtualenv venv_path
     bin_name "quantum-dhcp-agent --config-dir /etc/quantum/"
   end
   link_service "quantum-l3-agent" do
+    virtualenv venv_path
     bin_name "quantum-l3-agent --config-dir /etc/quantum/"
   end
 end
@@ -187,7 +200,12 @@ else
 end
 metadata_address = Chef::Recipe::Barclamp::Inventory.get_network_by_type(nova, "public").address rescue nil
 metadata_port = "8775"
-per_tenant_vlan=nova[:nova][:network][:tenant_vlans] rescue false
+if node[:quantum][:networking_mode] != 'local'
+  per_tenant_vlan=true
+else
+  per_tenant_vlan=false
+end
+
 
 rabbits = search(:node, "recipes:nova\\:\\:rabbit") || []
 if rabbits.length > 0
@@ -307,6 +325,7 @@ template "/etc/quantum/quantum.conf" do
       :metadata_address => metadata_address,
       :metadata_port => metadata_port,
       :per_tenant_vlan => per_tenant_vlan,
+      :networking_mode => node[:quantum][:networking_mode],
       :vlan_start => vlan_start,
       :vlan_end => vlan_end
     )
@@ -447,14 +466,16 @@ ENV['OS_TENANT_NAME']="admin"
 ENV['OS_AUTH_URL']="http://#{keystone_address}:#{keystone_service_port}/v2.0/"
 
 
-if per_tenant_vlan
-  fixed_network_type="vlan --provider:segmentation_id #{fixed_net["vlan"]}"
+if node[:quantum][:networking_mode] == 'vlan'
+  fixed_network_type="--provider:network_type vlan --provider:segmentation_id #{fixed_net["vlan"]} --provider:physical_network physnet1"
+elsif node[:quantum][:networking_mode] == 'gre'
+  fixed_network_type="--provider:network_type gre --provider:segmentation_id 1"
 else
-  fixed_network_type="flat"
+  fixed_network_type="--provider:network_type flat --provider:physical_network physnet1"
 end
 
 execute "create_fixed_network" do
-  command "quantum net-create fixed --shared --provider:network_type #{fixed_network_type} --provider:physical_network physnet1"
+  command "quantum net-create fixed --shared #{fixed_network_type}"
   not_if "quantum net-list | grep -q ' fixed '"
   ignore_failure true
   notifies :restart, resources(:service => "quantum")
@@ -593,7 +614,7 @@ if per_tenant_vlan
   ruby_block "get_private_networks" do
      block do
        require 'csv'
-       csv_data=`quantum subnet-list -c cidr -f csv -- --shared false`
+       csv_data=`quantum subnet-list -c cidr -f csv -- --shared false --enable_dhcp true`
        private_quantum_networks=CSV.parse(csv_data)
        private_quantum_networks.shift
        node.set[:quantum][:network][:private_networks]=private_quantum_networks

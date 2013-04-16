@@ -56,12 +56,23 @@ locale_additions:
 
 debs:
   ubuntu-12.04:
+    repos:
+      - deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-updates/grizzly main
+      - deb http://ubuntu-cloud.archive.canonical.com/ubuntu precise-proposed/grizzly main
   pkgs:
     - quantum-common
     - quantum-server
     - python-quantum
     - python-quantumclient
     - quantum-plugin-openvswitch
+    - quantum-dhcp-agent
+    - quantum-l3-agent
+    - quantum-plugin-linuxbridge
+    - quantum-plugin-linuxbridge-agent
+    - quantum-plugin-openvswitch
+    - quantum-plugin-openvswitch-agent
+    - openvswitch-switch
+    - openvswitch-common
 
 git_repo:
   - quantum https://github.com/openstack/quantum.git stable/grizzly

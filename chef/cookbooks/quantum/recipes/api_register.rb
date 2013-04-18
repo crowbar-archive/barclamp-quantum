@@ -14,8 +14,14 @@
 #
 
 
+loadbalancers = search(:node, "roles:loadbalancer")
+if loadbalances.length > 0
+  loadbalancer = loadbalancers[0]
+  pub_ipaddress = loadbalancer[:keepalived][:virtual_ipaddress]
+else
+  pub_ipaddress = Chef::Recipe::Barclamp::Inventory.get_network_by_type(node, "public").address rescue my_ipaddress
+end
 my_ipaddress = Chef::Recipe::Barclamp::Inventory.get_network_by_type(node, "admin").address
-pub_ipaddress = Chef::Recipe::Barclamp::Inventory.get_network_by_type(node, "public").address rescue my_ipaddress
 
 env_filter = " AND keystone_config_environment:keystone-config-#{node[:quantum][:keystone_instance]}"
 keystones = search(:node, "recipes:keystone\\:\\:server#{env_filter}") || []

@@ -49,7 +49,7 @@ else
   end
   link_service "quantum-metadata-agent" do
     virtualenv venv_path
-    bin_name "quantum-metadata-agent --config-dir /etc/quantum/"
+    bin_name "quantum-metadata-agent --config-dir /etc/quantum/ --config-file /etc/quantum/metadata_agent.ini"
   end
 end
 

@@ -166,13 +166,14 @@ service quantum_agent do
   action :enable
 end
 
-Chef::Log.info("Configuring Quantum to use MySQL backend")
 
-include_recipe "mysql::client"
+include_recipe "database::client" 
+backend_name = Chef::Recipe::Database::Util.get_backend_name(sql) 
 
-package "python-mysqldb" do
-    action :install
-end
+Chef::Log.info("Configuring Quantum to use #{backend_name} backend")
+
+include_recipe "#{backend_name}::client" 
+include_recipe "#{backend_name}::python-client"
 
 #env_filter = " AND nova_config_environment:nova-config-#{node[:tempest][:nova_instance]}"
 #assuming we have only one nova

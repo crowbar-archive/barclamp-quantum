@@ -1,17 +1,44 @@
-
 {
   "id": "bc-template-quantum",
-  "description": "Centralized authentication and authorization service for OpenStack",
+  "description": "API-enabled, pluggable virtual network service for OpenStack",
   "attributes": {
     "quantum": {
+      "service_user": "quantum",
+      "gitrepo": "http://github.com/openstack/quantum.git",
+      "git_instance": "",
+      "git_refspec": "stable/grizzly",
+      "use_gitbarclamp": false,
+      "use_pip_cache": false,
+      "use_gitrepo": false,
+      "rabbitmq_instance": "none",
+      "use_virtualenv": false,
+      "keystone_instance": "none",
+      "pfs_deps": [
+        "python-eventlet",
+        "python-greenlet",
+        "python-pastedeploy",
+        "python-paste",
+        "python-routes",
+        "python-sqlalchemy",
+        "python-migrate",
+        "python-passlib",
+        "python-lxml",
+        "python-pam",
+        "python-iso8601",
+        "python-webob",
+        "pip://python-keystoneclient"
+      ],
       "debug": true,
       "verbose": true,
+      "networking_mode": "gre",
       "use_syslog": false,
       "sql_engine": "mysql",
       "mysql_instance": "none",
       "db": {
         "database": "quantum",
-        "user": "quantum"
+        "user": "quantum",
+        "ovs_database": "ovs",
+        "ovs_user": "ovs"
       },
       "sql": {
         "idle_timeout": 30,
@@ -20,7 +47,7 @@
         "pool_timeout": 200
       },
       "api": {
-        "service_port": 5000,
+        "service_port": 9696,
         "service_host": "0.0.0.0"
       },
       "admin": {
@@ -47,7 +74,7 @@
       },
       "elements": {},
       "element_order": [
-         ["quantum-server" ]       		           		     
+         ["quantum-server" ]
       ],
       "config": {
         "environment": "quantum-config-base",
@@ -58,4 +85,3 @@
     }
   }
 }
-

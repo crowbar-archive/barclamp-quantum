@@ -13,94 +13,215 @@
 # limitations under the License.
 #
 
-package "quantum" do
-  action :install
+include_recipe "quantum::database"
+include_recipe "quantum::api_register"
+include_recipe "quantum::common_install"
+
+unless node[:quantum][:use_gitrepo]
+  quantum_service_name="quantum-server"
+  pkgs = [ "quantum-server",
+           "quantum-l3-agent",
+           "quantum-dhcp-agent",
+           "quantum-plugin-openvswitch",
+           "quantum-metadata-agent" ]
+  pkgs.each { |p| package p }
+  file "/etc/default/quantum-server" do
+    action :delete
+    notifies :restart, "service[#{quantum_service_name}]"
+  end
+else
+  quantum_service_name="quantum-server"
+  quantum_path = "/opt/quantum"
+  venv_path = node[:quantum][:use_virtualenv] ? "#{quantum_path}/.venv" : nil
+  venv_prefix = node[:quantum][:use_virtualenv] ? ". #{venv_path}/bin/activate &&" : nil
+
+  link_service "quantum" do
+    virtualenv venv_path
+    bin_name "quantum-server --config-dir /etc/quantum/"
+  end
+  link_service "quantum-dhcp-agent" do
+    virtualenv venv_path
+    bin_name "quantum-dhcp-agent --config-dir /etc/quantum/"
+  end
+  link_service "quantum-l3-agent" do
+    virtualenv venv_path
+    bin_name "quantum-l3-agent --config-dir /etc/quantum/"
+  end
 end
 
-service "quantum" do
+# Kill all the libvirt default networks.
+bash "Destroy the libvort default network" do
+  command "virsh net-destroy default"
+  only_if "virsh net-list |grep default"
+end
+
+link "/etc/libvirt/qemu/networks/autostart/default.xml" do
+  action :delete
+end
+
+
+env_filter = " AND keystone_config_environment:keystone-config-#{node[:quantum][:keystone_instance]}"
+keystones = search(:node, "recipes:keystone\\:\\:server#{env_filter}") || []
+if keystones.length > 0
+  keystone = keystones[0]
+  keystone = node if keystone.name == node.name
+else
+  keystone = node
+end
+
+keystone_address = Chef::Recipe::Barclamp::Inventory.get_network_by_type(keystone, "admin").address if keystone_address.nil?
+keystone_token = keystone["keystone"]["service"]["token"]
+keystone_service_port = keystone["keystone"]["api"]["service_port"]
+keystone_admin_port = keystone["keystone"]["api"]["admin_port"]
+keystone_service_tenant = keystone["keystone"]["service"]["tenant"]
+keystone_service_user = node["quantum"]["service_user"]
+keystone_service_password = node["quantum"]["service_password"]
+keystone_service_url = "http://#{keystone_address}:#{keystone_admin_port}/v2.0"
+Chef::Log.info("Keystone server found at #{keystone_address}")
+
+template "/etc/quantum/api-paste.ini" do
+  source "api-paste.ini.erb"
+  owner "quantum"
+  group "root"
+  mode "0640"
+  variables(
+    :keystone_ip_address => keystone_address,
+    :keystone_admin_token => keystone_token,
+    :keystone_service_port => keystone_service_port,
+    :keystone_service_tenant => keystone_service_tenant,
+    :keystone_service_user => keystone_service_user,
+    :keystone_service_password => keystone_service_password,
+    :keystone_admin_port => keystone_admin_port
+  )
+end
+
+# Hardcode for now.
+template "/etc/quantum/l3_agent.ini" do
+  source "l3_agent.ini.erb"
+  owner "quantum"
+  group "root"
+  mode "0640"
+  variables(
+            :debug => "True",
+            :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
+            :use_namespaces => "True",
+            :handle_internal_only_routers => "True",
+            :metadata_port => 9697,
+            :send_arp_for_ha => 3,
+            :periodic_interval => 40,
+            :periodic_fuzzy_delay => 5
+            )
+end
+
+# Ditto
+template "/etc/quantum/dhcp_agent.ini" do
+  source "dhcp_agent.ini.erb"
+  owner "quantum"
+  group "root"
+  mode "0640"
+  variables(
+            :debug => "True",
+            :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
+            :use_namespaces => "True",
+            :resync_interval => 5,
+            :dhcp_driver => "quantum.agent.linux.dhcp.Dnsmasq",
+            :enable_isolated_metadata => "False",
+            :enable_metadata_network => "False"
+            )
+end
+
+# Double ditto.
+
+novas = search(:node, "roles:nova-multi-controller") || []
+if novas.length > 0
+  nova = novas[0]
+  nova = node if nova.name == node.name
+else
+  nova = node
+end
+metadata_address = Chef::Recipe::Barclamp::Inventory.get_network_by_type(nova, "public").address rescue nil
+metadata_port = "8775"
+
+template "/etc/quantum/metadata_agent.ini" do
+  source "metadata_agent.ini.erb"
+  owner "quantum"
+  group "root"
+  mode "0640"
+  variables(
+            :debug => "True",
+            :auth_url => keystone_service_url,
+            :auth_region => "RegionOne",
+            :admin_tenant_name => keystone_service_tenant,
+            :admin_user => keystone_service_user,
+            :admin_password => keystone_service_password,
+            :nova_metadata_port => metadata_port,
+            :nova_metadata_ip => metadata_address,
+            :metadata_shared_secret => "Secret"
+            )
+end
+
+service "quantum-metadata-agent" do
   supports :status => true, :restart => true
   action :enable
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
+  subscribes :restart, resources("template[/etc/quantum/metadata_agent.ini]")
 end
 
-::Chef::Recipe.send(:include, Opscode::OpenSSL::Password)
-
-node.set_unless['quantum']['db']['password'] = secure_password
-
-if node[:quantum][:sql_engine] == "mysql"
-    Chef::Log.info("Configuring Quantum to use MySQL backend")
-
-    include_recipe "mysql::client"
-
-    package "python-mysqldb" do
-        action :install
-    end
-
-    env_filter = " AND mysql_config_environment:mysql-config-#{node[:quantum][:mysql_instance]}"
-    mysqls = search(:node, "roles:mysql-server#{env_filter}") || []
-    if mysqls.length > 0
-        mysql = mysqls[0]
-        mysql = node if mysql.name == node.name
-    else
-        mysql = node
-    end
-
-    mysql_address = Chef::Recipe::Barclamp::Inventory.get_network_by_type(mysql, "admin").address if mysql_address.nil?
-    Chef::Log.info("Mysql server found at #{mysql_address}")
-    
-    # Create the Quantum Database
-    mysql_database "create #{node[:quantum][:db][:database]} database" do
-        host    mysql_address
-        username "db_maker"
-        password mysql[:mysql][:db_maker_password]
-        database node[:quantum][:db][:database]
-        action :create_db
-    end
-
-    mysql_database "create dashboard database user" do
-        host    mysql_address
-        username "db_maker"
-        password mysql[:mysql][:db_maker_password]
-        database node[:quantum][:db][:database]
-        action :query
-        sql "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER on #{node[:quantum][:db][:database]}.* to '#{node[:quantum][:db][:user]}'@'%' IDENTIFIED BY '#{node[:quantum][:db][:password]}';"
-    end
-    sql_connection = "mysql://#{node[:quantum][:db][:user]}:#{node[:quantum][:db][:password]}@#{mysql_address}/#{node[:quantum][:db][:database]}"
-elsif node[:quantum][:sql_engine] == "sqlite"
-    Chef::Log.info("Configuring Quantum to use SQLite backend")
-    sql_connection = "sqlite:////var/lib/quantum/quantum.db"
-    file "/var/lib/quantum/quantum.db" do
-        owner "quantum"
-        action :create_if_missing
-    end
+directory "/etc/quantum/plugins/openvswitch/" do
+   mode 00775
+   owner "quantum"
+   action :create
+   recursive true
 end
 
-template "/etc/quantum/quantum.conf" do
-    source "quantum.conf.erb"
-    mode "0644"
+unless node[:quantum][:use_gitrepo]
+  link "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini" do
+    to "/etc/quantum/quantum.conf"
+  end
+  service quantum_service_name do
+    supports :status => true, :restart => true
+    action :enable
+    subscribes :restart, resources("template[/etc/quantum/api-paste.ini]"), :immediately
+    subscribes :restart, resources("link[/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini]"), :immediately
+    subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
+  end
+else
+  template "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini" do
+    source "ovs_quantum_plugin.ini.erb"
+    owner "quantum"
+    group "root"
+    mode "0640"
     variables(
-      :sql_connection => sql_connection,
-      :sql_idle_timeout => node[:quantum][:sql][:idle_timeout],
-      :sql_min_pool_size => node[:quantum][:sql][:min_pool_size],
-      :sql_max_pool_size => node[:quantum][:sql][:max_pool_size],
-      :sql_pool_timeout => node[:quantum][:sql][:pool_timeout],
-      :debug => node[:quantum][:debug],
-      :verbose => node[:quantum][:verbose],
-      :admin_token => node[:quantum][:service][:token],
-      :service_port => node[:quantum][:api][:service_port], # Compute port
-      :service_host => node[:quantum][:api][:service_host],
-      :use_syslog => node[:quantum][:use_syslog]
+        :ovs_sql_connection => node[:quantum][:db][:sql_connection]
     )
-    notifies :restart, resources(:service => "quantum"), :immediately
+  end
+  service quantum_service_name do
+    supports :status => true, :restart => true
+    action :enable
+    subscribes :restart, resources("template[/etc/quantum/api-paste.ini]"), :immediately
+    subscribes :restart, resources("template[/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini]"), :immediately
+    subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
+  end
 end
 
-execute "quantum-manage db_sync" do
-  action :run
+service "quantum-dhcp-agent" do
+  supports :status => true, :restart => true
+  action :enable
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
+  subscribes :restart, resources("template[/etc/quantum/dhcp_agent.ini]")
 end
 
-my_ipaddress = Chef::Recipe::Barclamp::Inventory.get_network_by_type(node, "admin").address
-pub_ipaddress = Chef::Recipe::Barclamp::Inventory.get_network_by_type(node, "public").address rescue my_ipaddress
+service "quantum-l3-agent" do
+  supports :status => true, :restart => true
+  action :enable
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
+  subscribes :restart, resources("template[/etc/quantum/l3_agent.ini]")
+end
+
+include_recipe "quantum::post_install_conf"
 
 node[:quantum][:monitor] = {} if node[:quantum][:monitor].nil?
 node[:quantum][:monitor][:svcs] = [] if node[:quantum][:monitor][:svcs].nil?
-node[:quantum][:monitor][:svcs] <<["quantum"]
+node[:quantum][:monitor][:svcs] << ["quantum"] if node[:quantum][:monitor][:svcs].empty?
 node.save
+

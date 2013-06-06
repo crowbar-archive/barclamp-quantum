@@ -221,7 +221,14 @@ Chef::Log.info("Keystone server found at #{keystone_address}")
 vlan_start = node[:network][:networks][:nova_fixed][:vlan]
 vlan_end = vlan_start + 2000
 
-link "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini" do
+
+ovs_quantum_plugin = "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini"
+
+if quantum[:quantum][:use_gitrepo] == true
+  ovs_quantum_plugin = File.join("/opt/quantum",ovs_quantum_plugin)
+end
+
+link ovs_quantum_plugin do
   to "/etc/quantum/quantum.conf"
   notifies :restart, resources(:service => quantum_agent), :immediately
   notifies :restart, resources(:service => "openvswitch-switch"), :immediately

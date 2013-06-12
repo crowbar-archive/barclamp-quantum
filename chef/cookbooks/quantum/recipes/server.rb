@@ -35,7 +35,7 @@ else
   venv_path = node[:quantum][:use_virtualenv] ? "#{quantum_path}/.venv" : nil
   venv_prefix = node[:quantum][:use_virtualenv] ? ". #{venv_path}/bin/activate &&" : nil
 
-  link_service "quantum" do
+  link_service "quantum-server" do
     virtualenv venv_path
     bin_name "quantum-server --config-dir /etc/quantum/"
   end
@@ -47,11 +47,15 @@ else
     virtualenv venv_path
     bin_name "quantum-l3-agent --config-dir /etc/quantum/"
   end
+  link_service "quantum-metadata-agent" do
+    virtualenv venv_path
+    bin_name "quantum-metadata-agent --config-dir /etc/quantum/ --config-file /etc/quantum/metadata_agent.ini"
+  end
 end
 
 # Kill all the libvirt default networks.
-bash "Destroy the libvort default network" do
-  command "virsh net-destroy default"
+execute "Destroy the libvirt default network" do
+  command "virsh net-destroy default ; virsh net-undefine default"
   only_if "virsh net-list |grep default"
 end
 
@@ -85,13 +89,13 @@ template "/etc/quantum/api-paste.ini" do
   group "root"
   mode "0640"
   variables(
-    :keystone_ip_address => keystone_address,
-    :keystone_admin_token => keystone_token,
-    :keystone_service_port => keystone_service_port,
-    :keystone_service_tenant => keystone_service_tenant,
-    :keystone_service_user => keystone_service_user,
-    :keystone_service_password => keystone_service_password,
-    :keystone_admin_port => keystone_admin_port
+      :keystone_ip_address => keystone_address,
+      :keystone_admin_token => keystone_token,
+      :keystone_service_port => keystone_service_port,
+      :keystone_service_tenant => keystone_service_tenant,
+      :keystone_service_user => keystone_service_user,
+      :keystone_service_password => keystone_service_password,
+      :keystone_admin_port => keystone_admin_port
   )
 end
 
@@ -102,15 +106,15 @@ template "/etc/quantum/l3_agent.ini" do
   group "root"
   mode "0640"
   variables(
-            :debug => "True",
-            :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
-            :use_namespaces => "True",
-            :handle_internal_only_routers => "True",
-            :metadata_port => 9697,
-            :send_arp_for_ha => 3,
-            :periodic_interval => 40,
-            :periodic_fuzzy_delay => 5
-            )
+      :debug => "True",
+      :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
+      :use_namespaces => "True",
+      :handle_internal_only_routers => "True",
+      :metadata_port => 9697,
+      :send_arp_for_ha => 3,
+      :periodic_interval => 40,
+      :periodic_fuzzy_delay => 5
+  )
 end
 
 # Ditto
@@ -120,14 +124,14 @@ template "/etc/quantum/dhcp_agent.ini" do
   group "root"
   mode "0640"
   variables(
-            :debug => "True",
-            :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
-            :use_namespaces => "True",
-            :resync_interval => 5,
-            :dhcp_driver => "quantum.agent.linux.dhcp.Dnsmasq",
-            :enable_isolated_metadata => "False",
-            :enable_metadata_network => "False"
-            )
+      :debug => "True",
+      :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
+      :use_namespaces => "True",
+      :resync_interval => 5,
+      :dhcp_driver => "quantum.agent.linux.dhcp.Dnsmasq",
+      :enable_isolated_metadata => "False",
+      :enable_metadata_network => "False"
+  )
 end
 
 # Double ditto.
@@ -148,16 +152,16 @@ template "/etc/quantum/metadata_agent.ini" do
   group "root"
   mode "0640"
   variables(
-            :debug => "True",
-            :auth_url => keystone_service_url,
-            :auth_region => "RegionOne",
-            :admin_tenant_name => keystone_service_tenant,
-            :admin_user => keystone_service_user,
-            :admin_password => keystone_service_password,
-            :nova_metadata_port => metadata_port,
-            :nova_metadata_ip => metadata_address,
-            :metadata_shared_secret => "Secret"
-            )
+      :debug => "True",
+      :auth_url => keystone_service_url,
+      :auth_region => "RegionOne",
+      :admin_tenant_name => keystone_service_tenant,
+      :admin_user => keystone_service_user,
+      :admin_password => keystone_service_password,
+      :nova_metadata_port => metadata_port,
+      :nova_metadata_ip => metadata_address,
+      :metadata_shared_secret => "Secret"
+  )
 end
 
 service "quantum-metadata-agent" do
@@ -168,10 +172,10 @@ service "quantum-metadata-agent" do
 end
 
 directory "/etc/quantum/plugins/openvswitch/" do
-   mode 00775
-   owner "quantum"
-   action :create
-   recursive true
+  mode 00775
+  owner "quantum"
+  action :create
+  recursive true
 end
 
 unless node[:quantum][:use_gitrepo]
@@ -223,5 +227,5 @@ include_recipe "quantum::post_install_conf"
 node[:quantum][:monitor] = {} if node[:quantum][:monitor].nil?
 node[:quantum][:monitor][:svcs] = [] if node[:quantum][:monitor][:svcs].nil?
 node[:quantum][:monitor][:svcs] << ["quantum"] if node[:quantum][:monitor][:svcs].empty?
-node.save
 
+node.save

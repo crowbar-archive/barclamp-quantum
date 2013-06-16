@@ -25,7 +25,6 @@ quantum_agent=node[:quantum][:platform][:ovs_agent_name]
 
 quantum_path = "/opt/quantum"
 venv_path = quantum[:quantum][:use_virtualenv] ? "#{quantum_path}/.venv" : nil
-venv_prefix = quantum[:quantum][:use_virtualenv] ? ". #{venv_path}/bin/activate &&" : nil
 
 quantum_server = node[:quantum][:quantum_server] rescue false
 

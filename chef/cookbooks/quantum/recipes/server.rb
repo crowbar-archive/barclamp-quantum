@@ -36,7 +36,6 @@ else
   quantum_service_name="quantum-server"
   quantum_path = "/opt/quantum"
   venv_path = node[:quantum][:use_virtualenv] ? "#{quantum_path}/.venv" : nil
-  venv_prefix = node[:quantum][:use_virtualenv] ? ". #{venv_path}/bin/activate &&" : nil
 
   link_service "quantum-server" do
     virtualenv venv_path

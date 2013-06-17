@@ -111,14 +111,14 @@ template "/etc/quantum/l3_agent.ini" do
   group "root"
   mode "0640"
   variables(
-      :debug => "True",
-      :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
-      :use_namespaces => "True",
-      :handle_internal_only_routers => "True",
-      :metadata_port => 9697,
-      :send_arp_for_ha => 3,
-      :periodic_interval => 40,
-      :periodic_fuzzy_delay => 5
+    :debug => node[:quantum][:debug],
+    :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
+    :use_namespaces => "True",
+    :handle_internal_only_routers => "True",
+    :metadata_port => 9697,
+    :send_arp_for_ha => 3,
+    :periodic_interval => 40,
+    :periodic_fuzzy_delay => 5
   )
 end
 
@@ -129,13 +129,13 @@ template "/etc/quantum/dhcp_agent.ini" do
   group "root"
   mode "0640"
   variables(
-      :debug => "True",
-      :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
-      :use_namespaces => "True",
-      :resync_interval => 5,
-      :dhcp_driver => "quantum.agent.linux.dhcp.Dnsmasq",
-      :enable_isolated_metadata => "False",
-      :enable_metadata_network => "False"
+    :debug => node[:quantum][:debug],
+    :interface_driver => "quantum.agent.linux.interface.OVSInterfaceDriver",
+    :use_namespaces => "True",
+    :resync_interval => 5,
+    :dhcp_driver => "quantum.agent.linux.dhcp.Dnsmasq",
+    :enable_isolated_metadata => "False",
+    :enable_metadata_network => "False"
   )
 end
 
@@ -157,15 +157,15 @@ template "/etc/quantum/metadata_agent.ini" do
   group "root"
   mode "0640"
   variables(
-      :debug => "True",
-      :auth_url => keystone_service_url,
-      :auth_region => "RegionOne",
-      :admin_tenant_name => keystone_service_tenant,
-      :admin_user => keystone_service_user,
-      :admin_password => keystone_service_password,
-      :nova_metadata_port => metadata_port,
-      :nova_metadata_ip => metadata_address,
-      :metadata_shared_secret => "Secret"
+    :debug => node[:quantum][:debug],
+    :auth_url => keystone_service_url,
+    :auth_region => "RegionOne",
+    :admin_tenant_name => keystone_service_tenant,
+    :admin_user => keystone_service_user,
+    :admin_password => keystone_service_password,
+    :nova_metadata_port => metadata_port,
+    :nova_metadata_ip => metadata_address,
+    :metadata_shared_secret => "Secret"
   )
 end
 

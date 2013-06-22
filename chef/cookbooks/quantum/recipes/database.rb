@@ -83,7 +83,7 @@ props.each do |prop|
         host '%' 
         privileges privs 
         provider db_user_provider 
-        action :grant 
+        action :grant
     end
 
     node[@cookbook_name][:db][db_conn_name] = "#{url_scheme}://#{db_user}:#{db_pass}@#{sql_address}/#{db_name}"

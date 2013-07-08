@@ -94,3 +94,5 @@ else
     :ovs_modprobe => "modprobe openvswitch"
   }
 end
+
+default[:quantum][:metadata_agent][:metadata_proxy_shared_secret] = ""

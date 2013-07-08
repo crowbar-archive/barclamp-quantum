@@ -86,6 +86,8 @@ class QuantumService < ServiceObject
     } unless nodes.nil? or nodes.length ==0
 
     base["attributes"]["quantum"]["service_password"] = '%012d' % rand(1e12)
+    base["attributes"]["quantum"]["metadata_agent"] = {}
+    base["attributes"]["quantum"]["metadata_agent"]["metadata_proxy_shared_secret"] = '%012d' % rand(1e12)
 
     insts = ["Keystone", "Rabbitmq"]
 

@@ -183,7 +183,7 @@ template "/etc/quantum/metadata_agent.ini" do
     :admin_password => keystone_service_password,
     :nova_metadata_port => metadata_port,
     :nova_metadata_ip => metadata_address,
-    :metadata_shared_secret => "Secret"
+    :metadata_shared_secret => node[:quantum][:metadata_agent][:metadata_proxy_shared_secret]
   )
 end
 

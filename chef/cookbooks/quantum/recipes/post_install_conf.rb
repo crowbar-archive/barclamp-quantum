@@ -83,7 +83,7 @@ execute "create_fixed_network" do
 end
 
 execute "create_floating_network" do
-  command "quantum net-create floating --router:external=True"
+  command "quantum net-create floating --router:external=True --provider:segmentation_id 2"
   not_if "out=$(quantum net-list); [ $? != 0 ] || echo ${out} | grep -q ' floating '"
 end
 

@@ -202,7 +202,7 @@ else
   nova = node
 end
 if nova.name == node.name
-  metadata_host == Chef::Recipe::Barclamp::Inventory.get_network_by_type(nova, "admin").address
+  metadata_host = Chef::Recipe::Barclamp::Inventory.get_network_by_type(nova, "admin").address
 else
   metadata_host = nova[:fqdn]
 end

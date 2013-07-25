@@ -170,7 +170,11 @@ if novas.length > 0
 else
   nova = node
 end
-metadata_host = nova[:fqdn]
+if nova.name == node.name
+  metadata_host = Chef::Recipe::Barclamp::Inventory.get_network_by_type(nova, "admin").address
+else
+  metadata_host = nova[:fqdn]
+end
 metadata_port = "8775"
 
 template "/etc/quantum/metadata_agent.ini" do

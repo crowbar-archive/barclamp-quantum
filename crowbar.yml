@@ -33,10 +33,21 @@ crowbar:
   run_order: 94
   chef_order: 94
 
+nav:
+  network:
+    topology: '"/quantum/cisco_topology"'
+
+
 locale_additions:
   en:
+    nav:
+      topology: Cisco Plugin Topology
     barclamp:
       quantum:
+        cisco_topology:
+          node: Node
+          switch_ip: Cisco Switch IP
+          switch_port: Cisco Switch Port
         deploy:
           missing_os_sdn_network: The os_sdn network must be defined in bc-template-network.json
         edit_deployment: 
@@ -49,6 +60,7 @@ locale_additions:
           dhcp_domain: DHCP Domain
           networking_plugin: Plugin
           networking_mode: Mode
+          cisco_support: Cisco Support
           protocol: Protocol
           ssl_insecure: SSL Certificate is insecure (for instance, auto-signed)
           ssl_certfile: SSL Certificate File

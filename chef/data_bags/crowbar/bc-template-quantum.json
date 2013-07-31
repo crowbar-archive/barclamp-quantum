@@ -37,13 +37,16 @@
       "dhcp_domain": "openstack.local",
       "networking_mode": "gre",
       "networking_plugin": "openvswitch",
+      "cisco_support": false,
       "use_syslog": false,
       "database_instance": "none",
       "db": {
         "database": "quantum",
         "user": "quantum",
         "ovs_database": "ovs",
-        "ovs_user": "ovs"
+        "ovs_user": "ovs",
+        "cisco_database": "ovs",
+        "cisco_user": "ovs"
       },
       "sql": {
         "idle_timeout": 30,

@@ -237,15 +237,15 @@ end
 service node[:quantum][:platform][:dhcp_agent_name] do
   supports :status => true, :restart => true
   action :enable
-  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
-  subscribes :restart, resources("template[/etc/quantum/dhcp_agent.ini]")
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]"), :immediately
+  subscribes :restart, resources("template[/etc/quantum/dhcp_agent.ini]"), :immediately
 end
 
 service node[:quantum][:platform][:l3_agent_name] do
   supports :status => true, :restart => true
   action :enable
-  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
-  subscribes :restart, resources("template[/etc/quantum/l3_agent.ini]")
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]"), :immediately
+  subscribes :restart, resources("template[/etc/quantum/l3_agent.ini]"), :immediately
 end
 
 # This is some bad hack: we need to restart the server and the agent before

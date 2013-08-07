@@ -222,10 +222,6 @@ when "linuxbridge"
   end
 end
 
-link plugin_cfg_path do
-  to "/etc/quantum/quantum.conf"
-end
-
 service node[:quantum][:platform][:service_name] do
   supports :status => true, :restart => true
   action :enable

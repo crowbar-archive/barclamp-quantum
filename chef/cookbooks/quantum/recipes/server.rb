@@ -170,7 +170,11 @@ if novas.length > 0
 else
   nova = node
 end
-metadata_host = nova[:fqdn]
+if nova.name == node.name
+  metadata_host = Chef::Recipe::Barclamp::Inventory.get_network_by_type(nova, "admin").address
+else
+  metadata_host = nova[:fqdn]
+end
 metadata_port = "8775"
 metadata_proxy_shared_secret = (nova[:nova][:quantum_metadata_proxy_shared_secret] rescue '')
 
@@ -218,46 +222,26 @@ when "linuxbridge"
   end
 end
 
-unless node[:quantum][:use_gitrepo]
-  # no need to create link for plugin_cfg_path here; already handled in
-  # common_install recipe
-  service node[:quantum][:platform][:service_name] do
-    supports :status => true, :restart => true
-    action :enable
-    # no subscribes for :restart; this is handled by the
-    # "mark quantum-server as restart for post-install" ruby_block
-  end
-else
-  template "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini" do
-    source "ovs_quantum_plugin.ini.erb"
-    owner node[:quantum][:platform][:user]
-    group "root"
-    mode "0640"
-    variables(
-        :ovs_sql_connection => node[:quantum][:db][:sql_connection]
-    )
-  end
-  service quantum_service_name do
-    supports :status => true, :restart => true
-    action :enable
-    subscribes :restart, resources("template[/etc/quantum/api-paste.ini]")
-    subscribes :restart, resources("template[/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini]")
-    subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
-  end
+service node[:quantum][:platform][:service_name] do
+  supports :status => true, :restart => true
+  action :enable
+  subscribes :restart, resources("template[/etc/quantum/api-paste.ini]"), :immediately
+  subscribes :restart, resources("link[#{plugin_cfg_path}]"), :immediately
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
 end
 
 service node[:quantum][:platform][:dhcp_agent_name] do
   supports :status => true, :restart => true
   action :enable
-  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
-  subscribes :restart, resources("template[/etc/quantum/dhcp_agent.ini]")
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]"), :immediately
+  subscribes :restart, resources("template[/etc/quantum/dhcp_agent.ini]"), :immediately
 end
 
 service node[:quantum][:platform][:l3_agent_name] do
   supports :status => true, :restart => true
   action :enable
-  subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
-  subscribes :restart, resources("template[/etc/quantum/l3_agent.ini]")
+  subscribes :restart, resources("template[/etc/quantum/quantum.conf]"), :immediately
+  subscribes :restart, resources("template[/etc/quantum/l3_agent.ini]"), :immediately
 end
 
 # This is some bad hack: we need to restart the server and the agent before
@@ -269,7 +253,6 @@ services_to_restart = []
 ruby_block "mark quantum-server as restart for post-install" do
   block do
     _service_name = node[:quantum][:platform][:service_name]
-    _service_name = quantum_service_name if node[:quantum][:use_gitrepo]
     unless services_to_restart.include?(_service_name)
       services_to_restart << _service_name
     end
@@ -295,10 +278,14 @@ ruby_block "restart services for post-install" do
   block do
     services_to_restart.each do |service|
       Chef::Log.info("Restarting #{service}")
-      unless (platform?("ubuntu") && node.platform_version.to_f >= 10.04)
-        %x{/sbin/service #{service} restart}
+      if node[:quantum][:use_gitrepo]
+        %x{/etc/init.d/#{service} restart}
       else
-        %x{/sbin/restart #{service}}
+        unless (platform?("ubuntu") && node.platform_version.to_f >= 10.04)
+          %x{/sbin/service #{service} restart}
+        else
+          %x{/sbin/restart #{service}}
+        end
       end
     end
   end

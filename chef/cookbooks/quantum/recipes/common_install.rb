@@ -24,6 +24,7 @@ end
 case quantum[:quantum][:networking_plugin]
 when "openvswitch"
   quantum_agent = node[:quantum][:platform][:ovs_agent_name]
+  plugin_cfg_path = "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini"
 when "linuxbridge"
   quantum_agent = node[:quantum][:platform][:lb_agent_name]
 end
@@ -99,6 +100,10 @@ else
     command "cp /opt/quantum/etc/policy.json /etc/quantum/"
     creates "/etc/quantum/policy.json"
   end
+  execute "quantum_cp_plugins" do
+    command "cp -r /opt/quantum/etc/quantum/plugins /etc/quantum/plugins"
+    creates "/etc/quantum/plugins"
+  end
   execute "quantum_cp_rootwrap" do
     command "cp -r /opt/quantum/etc/quantum/rootwrap.d /etc/quantum/rootwrap.d"
     creates "/etc/quantum/rootwrap.d"
@@ -146,10 +151,21 @@ end
 
 case quantum[:quantum][:networking_plugin]
 when "openvswitch"
-  plugin_cfg_path = "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini"
   physnet = quantum[:quantum][:networking_mode] == 'gre' ? "br-tunnel" : "br-fixed"
   interface_driver = "quantum.agent.linux.interface.OVSInterfaceDriver"
   external_network_bridge = "br-public"
+
+  template plugin_cfg_path do
+    cookbook "quantum"
+    source "ovs_quantum_plugin.ini.erb"
+    owner quantum[:quantum][:platform][:user]
+    group "root"
+    mode "0640"
+    variables(
+        :ovs_sql_connection => quantum[:quantum][:db][:sql_connection],
+        :rootwrap_bin =>  node[:quantum][:rootwrap]
+    )
+  end
 
   service "openvswitch-switch" do
     supports :status => true, :restart => true

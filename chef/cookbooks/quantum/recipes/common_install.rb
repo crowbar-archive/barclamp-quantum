@@ -27,6 +27,7 @@ when "openvswitch"
   plugin_cfg_path = "/etc/quantum/plugins/openvswitch/ovs_quantum_plugin.ini"
 when "linuxbridge"
   quantum_agent = node[:quantum][:platform][:lb_agent_name]
+  plugin_cfg_path = "/etc/quantum/plugins/linuxbridge/linuxbridge_conf.ini"
 end
 
 quantum_path = "/opt/quantum"
@@ -73,6 +74,11 @@ unless quantum[:quantum][:use_gitrepo]
   package quantum_agent do
     action :install
   end
+
+  link plugin_cfg_path do
+    to "/etc/quantum/quantum.conf"
+  end 
+
 else
   quantum_agent = "quantum-openvswitch-agent"
   pfs_and_install_deps "quantum" do
@@ -162,7 +168,7 @@ when "openvswitch"
     group "root"
     mode "0640"
     variables(
-        :ovs_sql_connection => quantum[:quantum][:db][:sql_connection],
+        :ovs_sql_connection => quantum[:quantum][:db][:ovs_sql_connection],
         :rootwrap_bin =>  node[:quantum][:rootwrap]
     )
   end
@@ -217,10 +223,20 @@ when "openvswitch"
     end
   end
 when "linuxbridge"
-  plugin_cfg_path = "/etc/quantum/plugins/linuxbridge/linuxbridge_conf.ini"
   physnet = (node[:crowbar_wall][:network][:nets][:nova_fixed].first rescue nil)
   interface_driver = "quantum.agent.linux.interface.BridgeInterfaceDriver"
   external_network_bridge = ""
+
+  template plugin_cfg_path do
+    cookbook "quantum"
+    source "linuxbridge_conf.ini.erb"
+    owner quantum[:quantum][:platform][:user]
+    group "root"
+    mode "0640"
+    variables(
+        :sql_connection => quantum[:quantum][:db][:sql_connection]
+    )
+  end
 end
 
 #env_filter = " AND nova_config_environment:nova-config-#{node[:tempest][:nova_instance]}"
@@ -394,7 +410,8 @@ else
   service quantum_agent do
     supports :status => true, :restart => true
     action :enable
-    subscribes :restart, resources("template[#{plugin_cfg_path}]")
+    subscribes :restart, resources("link[#{plugin_cfg_path}]") unless quantum[:quantum][:use_gitrepo]
+    subscribes :restart, resources("template[#{plugin_cfg_path}]") if quantum[:quantum][:use_gitrepo]
     subscribes :restart, resources("template[/etc/quantum/quantum.conf]")
   end
 end

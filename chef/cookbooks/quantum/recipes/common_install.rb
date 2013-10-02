@@ -25,6 +25,15 @@ case quantum[:quantum][:networking_plugin]
 when "openvswitch"
   quantum_agent = node[:quantum][:platform][:ovs_agent_name]
   quantum_agent_pkg = node[:quantum][:platform][:ovs_agent_pkg]
+
+  # Arrange for quantum-ovs-cleanup to be run on bootup of compute nodes only
+  unless quantum.name == node.name
+    cookbook_file "/etc/init.d/quantum-ovs-cleanup" do
+      source "quantum-ovs-cleanup"
+      mode 00755
+      owner node[:quantum][:platform][:user]
+    end
+  end
 when "linuxbridge"
   quantum_agent = node[:quantum][:platform][:lb_agent_name]
   quantum_agent_pkg = node[:quantum][:platform][:lb_agent_pkg]
